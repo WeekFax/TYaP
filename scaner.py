@@ -41,6 +41,7 @@ class TScaner():
         self.numLine = 0
         self.numInLine = 0
 
+
     def Num(self):
         if (self.t[self.uk] >= '0') and (self.t[self.uk] <= '9'):
             return True
@@ -50,7 +51,7 @@ class TScaner():
     def HexLetter(self):
         if (self.t[self.uk] >= 'a') and (self.t[self.uk] <= 'f'):
             return True
-        elif (self.t[self.uk] >= 'A') and (self[self.uk] <= 'F'):
+        elif (self.t[self.uk] >= 'A') and (self.t[self.uk] <= 'F'):
             return True
         else:
             return False
@@ -72,6 +73,15 @@ class TScaner():
             self.t += line
         self.t += b'\0'.decode()
         self.uk = 0
+
+        arr = []
+        sc = self.Scanner()
+        arr.append([sc[0], sc[1], sc[2], sc[3]])
+        while sc[0] != END:
+            sc = self.Scanner()
+            arr.append([sc[0], sc[1], sc[2], sc[3]])
+
+        return arr
 
     def getUK(self):
         return self.uk, self.numLine, self.numInLine
@@ -110,9 +120,7 @@ class TScaner():
                 self.uk += 1
                 self.numInLine += 1
                 i += 1
-            if lex == 'main':
-                return MAIN, lex, self.numLine, self.numInLine
-            elif lex == 'break':
+            if lex == 'break':
                 return BREAK, lex, self.numLine, self.numInLine
             elif lex == 'typedef':
                 return TYPEDEF, lex, self.numLine, self.numInLine
@@ -269,7 +277,7 @@ class TScaner():
 
         # Если конец выходим
         if self.t[self.uk] == '\0':
-            return END, '', self.numLine, self.numInLine
+            return END, 'Конец строки', self.numLine, self.numInLine
 
         self.uk+=1
         self.numInLine+=1

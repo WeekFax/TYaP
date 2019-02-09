@@ -1,23 +1,25 @@
 from scaner import *
+from structure import *
+
+import numpy as np
 
 
 class SyntaxAnalizer:
     def __init__(self):
         self.t = TScaner()
 
+    def make_err(self, expect, elem):
+        return 'Ожидался {}, встречено {} [Line {}:{}]'.format(expect, elem[1], elem[2]+1, elem[3])
+
     def check_correct(self, filename):
-        self.t.getData(filename)
-        arr = []
-        sc = self.t.Scanner()
-        arr.append([sc[0], sc[1], sc[2], sc[3]])
-        while sc[0] != END:
-            sc = self.t.Scanner()
-            arr.append([sc[0], sc[1], sc[2], sc[3]])
+        arr = self.t.getData(filename)
         err = [e for e in arr if e[0] == ERROR]
         if len(err) > 0:
             for e in err:
                 print(e[1])
             return False
+        else:
+            print('Сканер: ошибок не обнаружено')
         return self.program(arr)
 
     # Программа
@@ -42,7 +44,7 @@ class SyntaxAnalizer:
         if arr[0][0] == INT or arr[0][0] == LINT or arr[0][0] == ID:
             arr = arr[1:]
         else:
-            err = 'Ожидался идентификатор, встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+            err = self.make_err('идентификатор', arr[0])
         return err, arr
 
     # Описание данных
@@ -61,7 +63,7 @@ class SyntaxAnalizer:
                             if arr[0][0] == SQUARE_BRACE_CLOSE:
                                 arr = arr[1:]
                             else:
-                                err = 'Ожидалось "]", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                                err = self.make_err('"]"', arr[0])
                                 arr = bufArr
 
         else:
@@ -75,7 +77,7 @@ class SyntaxAnalizer:
             if arr[0][0] == SEMICOLON:
                 arr = arr[1:]
             else:
-                err = 'Ожидалась ";", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                err = self.make_err('";"', arr[0])
 
         return err, arr
 
@@ -93,7 +95,7 @@ class SyntaxAnalizer:
                     if arr[0][0] == SQUARE_BRACE_CLOSE:
                         arr = arr[1:]
                     else:
-                        err = 'Ожидалось "]", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                        err = self.make_err('"]"', arr[0])
         if err is None:
             if arr[0][0] == COMMA:
                 bufArr = arr
@@ -120,9 +122,9 @@ class SyntaxAnalizer:
                 if arr[0][0] == CURLY_BRACE_CLOSE:
                     arr = arr[1:]
                 else:
-                    err = 'Ожидалось "}"' + ', встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                    err = self.make_err('"}"', arr[0])
         else:
-            err = 'Ожидалось "{", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+            err = self.make_err('"{"', arr[0])
         return err, arr
 
     # Оператор
@@ -134,7 +136,7 @@ class SyntaxAnalizer:
             if arr[1][0] == SEMICOLON:
                 return err, arr[2:]
             else:
-                err = 'Ожидалось ";", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                err = self.make_err('";"', arr[0])
         elif arr[0][0] == FOR:
             err, arr = self.for_operator(arr)
         elif arr[0][0] == CURLY_BRACE_OPEN:
@@ -145,7 +147,7 @@ class SyntaxAnalizer:
                 if arr[0][0] == SEMICOLON:
                     return err, arr[1:]
                 else:
-                    err = 'Ожидалось ";", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                    err = self.make_err('";"', arr[0])
             # err = 'Ожидался оператор, встречено {}'.format(arr[0][1])
         return err, arr
 
@@ -164,11 +166,11 @@ class SyntaxAnalizer:
                                 if arr[0][0] == ROUND_BRACE_CLOSE:
                                     return self.operator(arr[1:])
                                 else:
-                                    err = 'Ожидалось ")", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                                    err = self.make_err('")"', arr[0])
                         else:
-                            err = 'Ожидалось ";", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                            err = self.make_err('";"', arr[0])
             else:
-                err = 'Ожидалось "(", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                err = self.make_err('"("', arr[0])
         return err, arr
 
 
@@ -193,7 +195,7 @@ class SyntaxAnalizer:
             if arr[0][0] == ROUND_BRACE_CLOSE:
                 return None, arr[1:]
             else:
-                err = 'Ожидалось ")", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                err = self.make_err('")"', arr[0])
         else:
             while err is None and arr[0][0] == SQUARE_BRACE_OPEN:
                 err, arr = self.A1(arr[1:])
@@ -201,7 +203,7 @@ class SyntaxAnalizer:
                     if arr[0][0] == SQUARE_BRACE_CLOSE:
                         arr = arr[1:]
                     else:
-                        err = 'Ожидалось "]", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                        err = self.make_err('"]"', arr[0])
                 else:
                     return err, arr
             if arr[0][0] == ASSIGN:
@@ -219,7 +221,7 @@ class SyntaxAnalizer:
     def ID(self, arr):
         err = None
         if arr[0][0] != ID :
-            err = 'Ожидался идентификатор, встречено: {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+            err = self.make_err('идентификатор', arr[0])
         return err, arr
 
     # Константа
@@ -228,7 +230,7 @@ class SyntaxAnalizer:
         if arr[0][0] == TYPE_INT or arr[0][0] == TYPE_SINT:
             arr = arr[1:]
         else:
-            err = 'Ожидалась константа, встречено: {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+            err = self.make_err('константа', arr[0])
         return err, arr
 
     # A1
@@ -281,7 +283,7 @@ class SyntaxAnalizer:
             err, arr = self.A1(arr[1:])
             if err is None:
                 if arr[0][0] == ROUND_BRACE_CLOSE:
-                    err = 'Ожидалось ")", встречено {} [Line {}:{}]'.format(arr[0][1], arr[0][2]+1, arr[0][3])
+                    err = self.make_err('")"', arr[0])
             return err, arr
 
         err, arr = self.const(arr)
@@ -292,11 +294,31 @@ class SyntaxAnalizer:
         return err, arr
 
 
+class SyntaxAnalizerV2:
+    def __init__(self):
+        self.t = TScaner()
+
+    def make_err(self, expect, elem):
+        return 'Ожидался {}, встречено {} [Line {}:{}]'.format(expect, elem[1], elem[2]+1, elem[3])
+
+    def check_correct(self, filename):
+        arr = self.t.getData(filename)
+        err = [e for e in arr if e[0] == ERROR]
+        # arr = np.array(arr)
+        if len(err) > 0:
+            for e in err:
+                print(e[1])
+            return None
+        else:
+            print('Сканер: ошибок не обнаружено')
+            return arr
+
+    def get_layers(self, filename):
+        lex_arr = self.check_correct(filename)
+        return Layer(lex_arr)
 
 
-if __name__ == '__main__':
-    a = SyntaxAnalizer()
-    print(a.check_correct('code.txt'))
+
 
 
 

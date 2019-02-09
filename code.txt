@@ -1,15 +1,17 @@
 //asd fkkk
 
-typedef dds int[10];
-typedef long __int64;
+typedef int dds[10];
+typedef dds long;
+int a, b;
 
-int main()
-{
+int main(){
     long x=a / b;
-    for (int i=0;i<x;x=x+0x43){
-        print(i);
+    for (int i=1000;i<x;x=x+0x43){
+        for (int j=0;j<i; j++)
+            print(i);
     }
+
     srand(time(NULL[0]));
     int n=3,m=4;
-    string str;
-}}
+}
+
