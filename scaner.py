@@ -90,6 +90,7 @@ class TScaner():
         self.uk, self.numLine, self.numInLine = uk
 
     def Scanner(self):
+
         # Счтываение лексемы
         lex = ''
         while self.t[self.uk] == ' ' or self.t[self.uk] == '\n' or self.t[self.uk] == '\t' or self.t[self.uk] == '/':
@@ -109,8 +110,11 @@ class TScaner():
                 if self.t[self.uk] == '\n':
                     self.numInLine = 0
                     self.numLine += 1
+                else:
+                    self.numInLine += 1
                 self.uk += 1
 
+        numInLine = self.numInLine
 
         # Если первый символ буква
         if self.Letter():
@@ -121,17 +125,17 @@ class TScaner():
                 self.numInLine += 1
                 i += 1
             if lex == 'break':
-                return BREAK, lex, self.numLine, self.numInLine
+                return BREAK, lex, self.numLine, numInLine
             elif lex == 'typedef':
-                return TYPEDEF, lex, self.numLine, self.numInLine
+                return TYPEDEF, lex, self.numLine, numInLine
             elif lex == 'for':
-                return FOR, lex, self.numLine, self.numInLine
+                return FOR, lex, self.numLine, numInLine
             elif lex == 'int':
-                return INT, lex, self.numLine, self.numInLine
+                return INT, lex, self.numLine, numInLine
             elif lex == '__int64':
-                return LINT, lex, self.numLine, self.numInLine
+                return LINT, lex, self.numLine, numInLine
             else:
-                return ID, lex, self.numLine, self.numInLine
+                return ID, lex, self.numLine, numInLine
 
         # Если первый символ цифра
         if self.Num():
@@ -152,8 +156,8 @@ class TScaner():
                         self.uk += 1
                         i += 1
                     if self.Letter():
-                        return ERROR, 'Неверная константа в троке {}'.format(self.numLine+1), self.numLine, self.numInLine
-                    return TYPE_SINT, lex, self.numLine, self.numInLine
+                        return ERROR, 'Неверная константа в троке {}'.format(self.numLine+1), self.numLine, numInLine
+                    return TYPE_SINT, lex, self.numLine, numInLine
 
             while self.Num() and i < MAX_LEX_LEN:
                 lex += self.t[self.uk]
@@ -161,8 +165,8 @@ class TScaner():
                 self.uk += 1
                 i += 1
             if self.Letter():
-                return ERROR, 'Неверная константа в троке {}'.format(self.numLine+1), self.numLine, self.numInLine
-            return TYPE_INT, lex, self.numLine, self.numInLine
+                return ERROR, 'Неверная константа в троке {}'.format(self.numLine+1), self.numLine, numInLine
+            return TYPE_INT, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '=':
             lex += self.t[self.uk]
@@ -172,8 +176,8 @@ class TScaner():
                 lex += self.t[self.uk]
                 self.numInLine += 1
                 self.uk += 1
-                return EQUAL, lex, self.numLine, self.numInLine
-            return ASSIGN, lex, self.numLine, self.numInLine
+                return EQUAL, lex, self.numLine, numInLine
+            return ASSIGN, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '>':
             lex += self.t[self.uk]
@@ -183,8 +187,8 @@ class TScaner():
                 lex += self.t[self.uk]
                 self.numInLine += 1
                 self.uk += 1
-                return MORE_EQUAL, lex, self.numLine, self.numInLine
-            return MORE, lex, self.numLine, self.numInLine
+                return MORE_EQUAL, lex, self.numLine, numInLine
+            return MORE, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '<':
             lex += self.t[self.uk]
@@ -194,93 +198,93 @@ class TScaner():
                 lex += self.t[self.uk]
                 self.numInLine += 1
                 self.uk += 1
-                return LESS_EQUAL, lex, self.numLine, self.numInLine
-            return LESS, lex, self.numLine, self.numInLine
+                return LESS_EQUAL, lex, self.numLine, numInLine
+            return LESS, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '+':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return PLUS, lex, self.numLine, self.numInLine
+            return PLUS, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '-':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return MINUS, lex, self.numLine, self.numInLine
+            return MINUS, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '*':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return STAR, lex, self.numLine, self.numInLine
+            return STAR, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '%':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return PERCENT, lex, self.numLine, self.numInLine
+            return PERCENT, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '(':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return ROUND_BRACE_OPEN, lex, self.numLine, self.numInLine
+            return ROUND_BRACE_OPEN, lex, self.numLine, numInLine
 
         if self.t[self.uk] == ')':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return ROUND_BRACE_CLOSE, lex, self.numLine, self.numInLine
+            return ROUND_BRACE_CLOSE, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '{':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return CURLY_BRACE_OPEN, lex, self.numLine, self.numInLine
+            return CURLY_BRACE_OPEN, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '}':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return CURLY_BRACE_CLOSE, lex, self.numLine, self.numInLine
+            return CURLY_BRACE_CLOSE, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '[':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return SQUARE_BRACE_OPEN, lex, self.numLine, self.numInLine
+            return SQUARE_BRACE_OPEN, lex, self.numLine, numInLine
 
         if self.t[self.uk] == ']':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return SQUARE_BRACE_CLOSE, lex, self.numLine, self.numInLine
+            return SQUARE_BRACE_CLOSE, lex, self.numLine, numInLine
 
         if self.t[self.uk] == ';':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return SEMICOLON, lex, self.numLine, self.numInLine
+            return SEMICOLON, lex, self.numLine, numInLine
 
         if self.t[self.uk] == '.':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return DOT, lex, self.numLine, self.numInLine
+            return DOT, lex, self.numLine, numInLine
 
         if self.t[self.uk] == ',':
             lex += self.t[self.uk]
             self.numInLine += 1
             self.uk += 1
-            return COMMA, lex, self.numLine, self.numInLine
+            return COMMA, lex, self.numLine, numInLine
 
         # Если конец выходим
         if self.t[self.uk] == '\0':
-            return END, 'Конец строки', self.numLine, self.numInLine
+            return END, 'Конец строки', self.numLine, numInLine
 
         self.uk+=1
         self.numInLine+=1
         return ERROR, 'Неверный символ [{}:{}]: "{}({})"'.format(self.numLine, self.numInLine+1,
                                                                  self.t[self.uk-1], self.t[self.uk-1].encode()[0]), \
-               self.numLine, self.numInLine
+               self.numLine, numInLine

@@ -1,26 +1,52 @@
 from scaner import *
 import numpy as np
 class Layer:
-    def __init__(self, lex_arr, param_list=None, parent=None):
+    def __init__(self, lex_arr, type=None, head=None, parent=None, show=False):
         self.operators = []
         self.types = []
         self.variables = []
         self.functions = []
+        self.warnings = []
+        self.accept_warnings = True
+
         self.parent = parent
 
         if parent is None:
             self.add_type('int', None)
             self.add_type('__int64', None)
-        if param_list is not None:
-            for param in param_list:
-                self.parse_new_var(param)
+        if type is not None:
+            if type == 'FOR':
+                self.parse_for_head(head)
+            if type == 'FUNCTION':
+                self.parse_func_head(head)
 
         is_ok, err = self.parse_layer(lex_arr)
-        if not is_ok:
-            print(err)
-        else:
+        if is_ok:
             if parent is None:
-                self.print()
+                self.print(show)
+        else:
+            print(err)
+
+    def parse_for_head(self, line):
+        is_var_description, err, var_description, new_lex_arr = self.check_var_descrtiption(line[2:])
+        self.parse_new_var(var_description, add=False)
+        is_A1, err_A1, A1, new_lex_arr_A1 = self.A1(new_lex_arr)
+        is_A1_1, err_A1_1, A1_1, new_lex_arr_A1_1 = self.A1(new_lex_arr_A1[1:])
+
+    def parse_func_head(self, line):
+        params_arr = line[3:]
+        params = []
+        while params_arr[0][0] != ROUND_BRACE_CLOSE:
+            param = []
+            while params_arr[0][0] != COMMA and params_arr[0][0] != ROUND_BRACE_CLOSE:
+                param.append(params_arr[0])
+                params_arr = params_arr[1:]
+
+            params += [param]
+            if params_arr[0][0] == COMMA:
+                params_arr = params_arr[1:]
+        for p in params:
+            self.parse_new_var(p)
 
     def get_level(self):
         if self.parent is None:
@@ -28,15 +54,26 @@ class Layer:
         else:
             return self.parent.get_level() + 1
 
-    def print(self):
-        prefix = '\t' * self.get_level()
-        for operator in self.operators:
-            head = ''
-            for lex in operator['head']:
-                head += lex[1]+' '
-            print(prefix+head)
-            if operator['type'] == 'FUNCTION' or operator['type'] == 'FOR':
-                operator['sublayer'].print()
+    def add_warning(self, warning):
+        if self.accept_warnings:
+            if self.parent is None:
+                self.warnings.append(warning)
+            else:
+                self.parent.add_warning(warning)
+
+    def print(self, show):
+        if self.parent is None:
+            for warn in self.warnings:
+                print(warn)
+        if show:
+            prefix = '\t' * self.get_level()
+            for operator in self.operators:
+                head = ''
+                for lex in operator['head']:
+                    head += lex[1]+' '
+                print(prefix+head)
+                if operator['type'] == 'FUNCTION' or operator['type'] == 'FOR':
+                    operator['sublayer'].print(show)
 
     def get_types(self):
         if self.parent is not None:
@@ -107,7 +144,7 @@ class Layer:
         return s
 
     def make_err(self, expectation, one_lex):
-        return 'Ожидалось "{}", встречено "{}" [{}:{}]'.format(expectation, one_lex[1], one_lex[2]+1, one_lex[3])
+        return 'Ожидалось "{}", встречено "{}" [{}:{}]'.format(expectation, one_lex[1], one_lex[2]+1, one_lex[3]+1)
 
     def parse_layer(self, lex_arr):
         while len(lex_arr) > 0:
@@ -115,7 +152,6 @@ class Layer:
             if is_type_desription:
                 if err_1 == '':
                     self.parse_new_type(line)
-                    self.parse_new_operator(line)
                     lex_arr = new_lex_arr
                 else:
                     return False, err_1
@@ -124,7 +160,6 @@ class Layer:
                 if is_var_description:
                     if err_2 == '':
                         self.parse_new_var(line)
-                        self.parse_new_operator(line)
                         lex_arr = new_lex_arr
                     else:
                         return False, err_2
@@ -139,7 +174,7 @@ class Layer:
                             else:
                                 return False, err_3
                         else:
-                            return False, 'Описание функций не допустимо внутри функции [{}:{}]'.format(lex_arr[0][2]+1, lex_arr[0][3])
+                            return False, 'Описание функций не допустимо внутри функции [{}:{}]'.format(lex_arr[0][2]+1, lex_arr[0][3]+1)
                     else:
                         if lex_arr[0][0] == END:
                             break
@@ -170,7 +205,10 @@ class Layer:
                         if err == '':
                             if new_lex_arr[0][0] == ROUND_BRACE_CLOSE:
                                 if new_lex_arr[1][0] == CURLY_BRACE_OPEN:
+                                    buf = self.accept_warnings
+                                    self.accept_warnings = False
                                     is_block, err_1, block, new_lex_arr_1 = self.check_block(new_lex_arr[2:])
+                                    self.accept_warnings = buf
                                     if is_block:
                                         if err_1 == '':
                                             if new_lex_arr_1[0][0] == CURLY_BRACE_CLOSE:
@@ -230,7 +268,10 @@ class Layer:
             else:
                 return True, self.make_err(';', lex_arr[1]), lex_arr[1:], lex_arr[:1]
         elif lex_arr[0][0] == CURLY_BRACE_OPEN:
+            buf = self.accept_warnings
+            self.accept_warnings = False
             is_block, err, block, new_lex_arr = self.check_block(lex_arr[1:])
+            self.accept_warnings = buf
             if is_block:
                 if err == '':
                     if new_lex_arr[0][0] == CURLY_BRACE_CLOSE:
@@ -243,18 +284,30 @@ class Layer:
                 return True, err, lex_arr[:2], new_lex_arr[2:]
         elif lex_arr[0][0] == FOR:
             if lex_arr[1][0] == ROUND_BRACE_OPEN:
+                buf = self.accept_warnings
+                self.accept_warnings = False
                 is_var_description, err, var_description, new_lex_arr = self.check_var_descrtiption(lex_arr[2:])
+                self.accept_warnings = buf
                 if is_var_description:
                     if err == '':
+                        buf = self.accept_warnings
+                        self.accept_warnings = False
                         is_A1, err_A1, A1, new_lex_arr_A1 = self.A1(new_lex_arr)
+                        self.accept_warnings = buf
                         if is_A1:
                             if err_A1 == '':
                                 if new_lex_arr_A1[0][0] == SEMICOLON:
+                                    buf = self.accept_warnings
+                                    self.accept_warnings = False
                                     is_A1_1, err_A1_1, A1_1, new_lex_arr_A1_1 = self.A1(new_lex_arr_A1[1:])
+                                    self.accept_warnings = buf
                                     if is_A1_1:
                                         if err_A1_1 == '':
                                             if new_lex_arr_A1_1[0][0] == ROUND_BRACE_CLOSE:
+                                                buf = self.accept_warnings
+                                                self.accept_warnings = False
                                                 is_operator, err_oper, operator, new_lex_arr_oper = self.check_operator(new_lex_arr_A1_1[1:])
+                                                self.accept_warnings = buf
                                                 if is_operator:
                                                     if err_oper == '':
                                                         return True, '', lex_arr[:2] + var_description + A1 + \
@@ -302,6 +355,12 @@ class Layer:
     def check_single_operator(self, lex_arr):
         if lex_arr[0][0] == ID:
             if lex_arr[1][0] == ROUND_BRACE_OPEN:
+
+                if not self.have_function(lex_arr[0][1]):
+                    self.add_warning(
+                        'Использование необъявленной функции {} [{}:{}]'.format(lex_arr[0][1], lex_arr[0][2] + 1,
+                                                                                   lex_arr[0][3] + 1))
+
                 if lex_arr[2][0] == ROUND_BRACE_CLOSE:
                     return True, '', lex_arr[:3], lex_arr[3:]
                 else:
@@ -325,6 +384,8 @@ class Layer:
                     else:
                         return True, self.make_err(')', lex_arr[0]), [], lex_arr
             else:
+                if not self.have_variable(lex_arr[0][1]):
+                    self.add_warning('Использование необъявленной переменной {} [{}:{}]'.format(lex_arr[0][1], lex_arr[0][2]+1, lex_arr[0][3]+1))
                 if lex_arr[1][0] == SQUARE_BRACE_OPEN:
                     is_A1, err, A1, new_lex_arr = self.A1(lex_arr[2:])
                     if is_A1:
@@ -380,6 +441,7 @@ class Layer:
                                     return True, err_1, [], lex_arr[3:]
                             if err_1 == '':
                                 return True, err_1, [], lex_arr[3:]
+
                     return True, '', lex_arr[:1], lex_arr[1:]
         return False, self.make_err('идентификатор', lex_arr[0]), [], lex_arr
 
@@ -584,7 +646,7 @@ class Layer:
             is_A6, err, A6, new_lex_arr = self.A6(lex_arr[2:])
             if is_A6:
                 if err == '':
-                    return True, '', new_lex_arr[:2] + A6, new_lex_arr
+                    return True, '', lex_arr[:2] + A6, new_lex_arr
                 else:
                     return True, err, [], new_lex_arr
             else:
@@ -624,6 +686,7 @@ class Layer:
             else:
                 return False, err, [], new_lex_arr
         else:
+
             is_single_oper, err, single_oper, new_lex_arr = self.check_single_operator(lex_arr)
             if is_single_oper:
                 if err == '':
@@ -638,7 +701,7 @@ class Layer:
         if self.have_type(one_lex[1]):
             return True, ''
         else:
-            return False, 'Неизвестный тип {} [{}:{}]'.format(one_lex[1], one_lex[2]+1, one_lex[3])
+            return False, 'Неизвестный тип {} [{}:{}]'.format(one_lex[1], one_lex[2]+1, one_lex[3]+1)
 
     # Вычисление оператора
     def calculate(self, oper):
@@ -648,27 +711,37 @@ class Layer:
     def parse_new_type(self, oper):
         new_type = oper[1][1]
         name = oper[2][1]
+        if self.have_type(name):
+            self.add_warning("Повторные объявление типа {} [{}:{}]".format(name, oper[2][2] + 1, oper[2][3]))
         if len(oper) > 4:
             self.add_type(name, new_type, int(oper[4][1]))
         else:
             self.add_type(name, new_type)
+        self.operators.append({'type': 'TYPEDEF', 'head': oper})
 
     # Добавление новой переменной
-    def parse_new_var(self, oper):
+    def parse_new_var(self, oper, add=True):
+        if add:
+            self.operators.append({'type': 'DEFAULT', 'head': oper})
         var_type = oper[0][1]
         oper = oper[1:]
-        while oper[0][0] != SEMICOLON:
+        while len(oper) > 0 and oper[0][0] != SEMICOLON:
             name = oper[0][1]
             oper = oper[1:]
-            if oper[0][0] == ASSIGN:
+
+            if len(oper) > 0 and oper[0][0] == ASSIGN:
                 assign_oper = []
                 oper = oper[1:]
                 while oper[0][0] != COMMA and oper[0][0] != SEMICOLON:
                     assign_oper += oper[:1]
                     oper = oper[1:]
+                if self.have_variable(name):
+                    self.add_warning('Повторное объявление переменной {} [{}:{}]'.format(name, oper[0][2] + 1, oper[0][3]))
                 self.add_variable(name, var_type, self.calculate(assign_oper))
                 oper = oper[1:]
             else:
+                if self.have_variable(name):
+                    self.add_warning('Повторное объявление переменной {} [{}:{}]'.format(name, oper[0][2] + 1, oper[0][3]))
                 self.add_variable(name, var_type)
             if len(oper) > 0:
                 if oper[0][0] == COMMA:
@@ -702,7 +775,7 @@ class Layer:
                     break
                 new_param.append(i)
 
-            self.operators.append({'type': 'FOR', 'head': head, 'sublayer': Layer(body, param_list=[new_param], parent=self)})
+            self.operators.append({'type': 'FOR', 'head': head, 'sublayer': Layer(body, type='FOR', head=head, parent=self)})
         else:
             self.operators.append({'type': 'DEFAULT', 'head': oper})
 
@@ -714,17 +787,20 @@ class Layer:
         head = func[:3]
         params = []
         while params_arr[0][0] != ROUND_BRACE_CLOSE:
-            head.append(params_arr[0])
             param = []
             while params_arr[0][0] != COMMA and params_arr[0][0] != ROUND_BRACE_CLOSE:
-                param.append(params_arr)
+                head.append(params_arr[0])
+                param.append(params_arr[0])
                 params_arr = params_arr[1:]
 
-            params += [params_arr[0]]
+
+            params += [param]
             if params_arr[0][0] == COMMA:
                 params_arr = params_arr[1:]
         head.append(params_arr[0])
         block_arr = params_arr[2:-1]
-        layer = Layer(block_arr, params, self)
+        layer = Layer(block_arr, type='FUNCTION', head=head, parent=self)
+        if self.have_function(func_name):
+            self.add_warning('Повторное объявление функции {} [{}:{}]'.format(func_name, func[1][2] + 1, func[1][3]))
         self.add_function(func_name, return_type, params, layer)
         self.operators.append({'type': 'FUNCTION', 'head': head, 'sublayer': layer})

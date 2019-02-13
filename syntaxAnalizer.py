@@ -299,7 +299,7 @@ class SyntaxAnalizerV2:
         self.t = TScaner()
 
     def make_err(self, expect, elem):
-        return 'Ожидался {}, встречено {} [Line {}:{}]'.format(expect, elem[1], elem[2]+1, elem[3])
+        return 'Ожидался {}, встречено {} [Line {}:{}]'.format(expect, elem[1], elem[2]+1, elem[3]+1)
 
     def check_correct(self, filename):
         arr = self.t.getData(filename)
@@ -313,9 +313,9 @@ class SyntaxAnalizerV2:
             print('Сканер: ошибок не обнаружено')
             return arr
 
-    def get_layers(self, filename):
+    def get_layers(self, filename, show=False):
         lex_arr = self.check_correct(filename)
-        return Layer(lex_arr)
+        return Layer(lex_arr, show=show)
 
 
 
