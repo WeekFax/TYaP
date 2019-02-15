@@ -68,10 +68,21 @@ class Layer:
         return str
 
     def parse_for_head(self, line):
-        is_var_description, err, var_description, new_lex_arr = self.check_var_descrtiption(line[2:])
-        self.parse_new_var(var_description, add=False)
-        is_A1, err_A1, A1, new_lex_arr_A1, A1_type, A1_t = self.A1(new_lex_arr)
-        is_A1_1, err_A1_1, A1_1, new_lex_arr_A1_1, A1_1_type, A1_1_t = self.A1(new_lex_arr_A1[1:])
+        if line[2][0]==SEMICOLON:
+            new_lex_arr = line[3:]
+        else:
+            is_var_description, err, var_description, new_lex_arr = self.check_var_descrtiption(line[2:])
+            self.parse_new_var(var_description, add=False)
+        if new_lex_arr[0][0] == SEMICOLON:
+            new_lex_arr_A1 = new_lex_arr[1:]
+        else:
+            is_A1, err_A1, A1, new_lex_arr_A1, A1_type, A1_t = self.A1(new_lex_arr)
+            if err_A1 != '':
+                self.add_err(err_A1)
+        if new_lex_arr_A1[0][0]!=ROUND_BRACE_CLOSE:
+            is_A1_1, err_A1_1, A1_1, new_lex_arr_A1_1, A1_1_type, A1_1_t = self.A1(new_lex_arr_A1[1:])
+            if err_A1_1 != '':
+                self.add_err(err_A1_1)
 
     def parse_func_head(self, line):
         return_type = line[0][1]
@@ -89,7 +100,7 @@ class Layer:
                 params_arr = params_arr[1:]
         for p in params:
             self.parse_new_var(p, add=False)
-        self.add_function(func_name, return_type, params, self)
+        # self.add_function(func_name, return_type, params, self)
 
     def get_level(self):
         if self.parent is None:
@@ -475,9 +486,13 @@ class Layer:
                     return True, self.make_err(')', lex_arr[0]), [], lex_arr, None, None
             else:
                 var_type = ''
-                if not self.have_variable(lex_arr[0][1]):
-                    self.add_warning('Использование необъявленной переменной {} [{}:{}]'.format(lex_arr[0][1], lex_arr[0][2]+1, lex_arr[0][3]+1))
+
                 if self.accept_warnings:
+                    if not self.have_variable(lex_arr[0][1]):
+                        return True, 'Использование необъявленной переменной {} [{}:{}]'.format(lex_arr[0][1],
+                                                                                                lex_arr[0][2] + 1,
+                                                                                                lex_arr[0][
+                                                                                                    3] + 1), [], lex_arr, None, None
                     var_type = self.get_var(lex_arr[0][1])['type']
 
                 var_name = lex_arr[:1]
@@ -668,10 +683,11 @@ class Layer:
                     is_A2_1, err_1, A2_1, new_lex_arr_1, A2_1_type, A2_1_t = self.A2(new_lex_arr[1:])
                     if is_A2_1:
                         if err_1 == '':
-                            if self.accept_warnings and A2_type != A2_1_type:
+                            if self.accept_warnings and A2_type != A2_1_type and \
+                                    ((A2_type != 'int' and A2_type != '__int64') or (A2_1_type != 'int' and A2_1_type != '__int64')):
                                 return True, 'Недопустимая операция {} для типов {} и {} [{}:{}]'\
                                     .format(new_lex_arr[0][1], A2_type, A2_1_type, new_lex_arr[0][2]+1, new_lex_arr[0][3]+1), [], new_lex_arr, None, None
-                            return True, '', A2 + new_lex_arr[:1] + A2_1, new_lex_arr_1, None, 'const'
+                            return True, '', A2 + new_lex_arr[:1] + A2_1, new_lex_arr_1, A2_type, 'const'
                         else:
                             return True, err_1, [], new_lex_arr_1, A2_1_type, None
                     else:
@@ -691,7 +707,8 @@ class Layer:
                     is_A3_1, err_1, A3_1, new_lex_arr_1, A3_1_type, A3_1_t = self.A3(new_lex_arr[1:])
                     if is_A3_1:
                         if err_1 == '':
-                            if self.accept_warnings and A3_type != A3_1_type:
+                            if self.accept_warnings and A3_type != A3_1_type  and \
+                                    ((A3_type != 'int' and A3_type != '__int64') or (A3_1_type != 'int' and A3_1_type != '__int64')):
                                 return True, 'Недопустимая операция {} для типов {} и {} [{}:{}]'\
                                     .format(new_lex_arr[0][1], A3_type, A3_1_type, new_lex_arr[0][2]+1, new_lex_arr[0][3]+1), \
                                        [], new_lex_arr, None, None
@@ -738,7 +755,7 @@ class Layer:
             if err == '':
                 if new_lex_arr[0][0] == PLUS and new_lex_arr[1][0] == PLUS or \
                         new_lex_arr[0][0] == MINUS and new_lex_arr[1][0] == MINUS:
-                    if self.accept_warnings and A5 != 'var':
+                    if self.accept_warnings and A5_t != 'var':
                         return True, 'Недопустимый параметр {} для операции [{}:{}]'.format(self.get_str_from_lex_arr(A5), A5[0][2]+1, A5[0][3]+1),\
                                A5, new_lex_arr, None, None
                     else:
