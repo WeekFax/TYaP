@@ -9,7 +9,7 @@ int a, b[1];
 int main(int y){
     main(fun());
    for (;;);
-
+     int x = (a+b[0]);
 
     long x=(a+3);
     for (int i=1000;i<x;x=y+0x43){

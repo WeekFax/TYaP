@@ -477,13 +477,13 @@ class Layer:
                 var_type = ''
                 if not self.have_variable(lex_arr[0][1]):
                     self.add_warning('Использование необъявленной переменной {} [{}:{}]'.format(lex_arr[0][1], lex_arr[0][2]+1, lex_arr[0][3]+1))
-                elif self.accept_warnings:
-                        var_type = self.get_var(lex_arr[0][1])['type']
+                if self.accept_warnings:
+                    var_type = self.get_var(lex_arr[0][1])['type']
 
                 var_name = lex_arr[:1]
                 lex_arr = lex_arr[1:]
                 while lex_arr[0][0] == SQUARE_BRACE_OPEN:
-                    is_A1, err, A1, new_lex_arr, A1_type, A1_t = self.A1(lex_arr[2:])
+                    is_A1, err, A1, new_lex_arr, A1_type, A1_t = self.A1(lex_arr[1:])
                     if is_A1:
                         if err == '':
                             if new_lex_arr[0][0] == SQUARE_BRACE_CLOSE:
@@ -492,11 +492,11 @@ class Layer:
                                                      ' [{}:{}]'.format(A1_type, A1[0][2]+1, A1[0][3]+1))
                                 var_name += lex_arr[:1]+A1+new_lex_arr[:1]
                                 lex_arr = new_lex_arr[1:]
-                                new_var_type = self.get_type(var_type)['type']
-                                if self.accept_warnings and new_var_type is None:
+                                if type(var_type) is list:
+                                    var_type = var_type[0]
+                                elif self.accept_warnings:
                                     return True, 'Тип {} не итерируемый [{}:{}]'.format(var_type, A1[0][2]+1, A1[0][3]+1), [], lex_arr[1:], var_type, 'var'
-                                else:
-                                    var_type = new_var_type
+
                             else:
                                 return True, self.make_err(']', new_lex_arr[0]), lex_arr[:2], new_lex_arr, var_type, None
                         else:
@@ -846,25 +846,25 @@ class Layer:
         while len(oper) > 0 and oper[0][0] != SEMICOLON:
             name = oper[0][1]
             oper = oper[1:]
+            cur_var_type = var_type
 
             while len(oper) > 0 and oper[0][0] == SQUARE_BRACE_OPEN:
-                var_type = [var_type for i in range(int(oper[1][1]))]
+                cur_var_type = [cur_var_type for i in range(int(oper[1][1]))]
                 oper = oper[3:]
-            if len(oper) > 0:
-                if oper[0][0] == ASSIGN:
-                    assign_oper = []
+            if len(oper) > 0 and oper[0][0] == ASSIGN:
+                assign_oper = []
+                oper = oper[1:]
+                while oper[0][0] != COMMA and oper[0][0] != SEMICOLON:
+                    assign_oper += oper[:1]
                     oper = oper[1:]
-                    while oper[0][0] != COMMA and oper[0][0] != SEMICOLON:
-                        assign_oper += oper[:1]
-                        oper = oper[1:]
-                    if self.have_variable(name):
-                        self.add_warning('Повторное объявление переменной {} [{}:{}]'.format(name, oper[0][2] + 1, oper[0][3]))
-                    self.add_variable(name, var_type, self.calculate(assign_oper))
-                    oper = oper[1:]
-                else:
-                    if self.have_variable(name):
-                        self.add_warning('Повторное объявление переменной {} [{}:{}]'.format(name, oper[0][2] + 1, oper[0][3]))
-                    self.add_variable(name, var_type)
+                if self.have_variable(name):
+                    self.add_warning('Повторное объявление переменной {} [{}:{}]'.format(name, oper[0][2] + 1, oper[0][3]))
+                self.add_variable(name, cur_var_type, self.calculate(assign_oper))
+                oper = oper[1:]
+            else:
+                if self.have_variable(name):
+                    self.add_warning('Повторное объявление переменной {} [{}:{}]'.format(name, oper[0][2] + 1, oper[0][3]))
+                self.add_variable(name, cur_var_type)
             if len(oper) > 0:
                 if oper[0][0] == COMMA:
                     oper = oper[1:]
