@@ -2,12 +2,14 @@ from scaner import *
 import numpy as np
 class Layer:
     def __init__(self, lex_arr, type=None, head=None, parent=None, show=False):
+        self.lex_arr = lex_arr
         self.operators = []
         self.types = []
         self.variables = []
         self.functions = []
         self.warnings = []
         self.accept_warnings = True
+        self.err = []
 
         self.parent = parent
 
@@ -19,21 +21,61 @@ class Layer:
                 self.parse_for_head(head)
             if type == 'FUNCTION':
                 self.parse_func_head(head)
+        if parent is None:
+            self.parse()
 
-        is_ok, err = self.parse_layer(lex_arr)
-        if is_ok:
-            if parent is None:
-                self.print(show)
-        else:
-            print(err)
+        if parent is None:
+            self.print(show)
+
+    def parse(self):
+        is_ok, err = self.parse_layer(self.lex_arr)
+        if not is_ok:
+            self.add_err(err)
+        for o in self.operators:
+            if 'sublayer' in o.keys():
+                o['sublayer'].parse()
+
+    def calculate_type(self, type_1, type_2):
+        if type_1 == 'int' and type_2 == '__int64':
+            return '__int64'
+        if type_1 == '__int64' and type_2 == 'int':
+            return '__int64'
+        return type_2
+
+    def get_weight(self, type_name):
+        if type_name == 'int':
+            return 0
+        if type_name == '__int64':
+            return 0
+        for t in self.get_types():
+            if t['name'] == type_name:
+                return self.get_weight(t['type'])+1
+
+    def get_var(self, var_name):
+        for v in self.get_variables():
+            if v['name'] == var_name:
+                return v
+
+    def get_type(self, type_name):
+        for t in self.get_types():
+            if t['name'] == type_name:
+                return t
+
+    def get_str_from_lex_arr(self, lex_arr):
+        str = ''
+        for l in lex_arr:
+            str+=l[1]
+        return str
 
     def parse_for_head(self, line):
         is_var_description, err, var_description, new_lex_arr = self.check_var_descrtiption(line[2:])
         self.parse_new_var(var_description, add=False)
-        is_A1, err_A1, A1, new_lex_arr_A1 = self.A1(new_lex_arr)
-        is_A1_1, err_A1_1, A1_1, new_lex_arr_A1_1 = self.A1(new_lex_arr_A1[1:])
+        is_A1, err_A1, A1, new_lex_arr_A1, A1_type, A1_t = self.A1(new_lex_arr)
+        is_A1_1, err_A1_1, A1_1, new_lex_arr_A1_1, A1_1_type, A1_1_t = self.A1(new_lex_arr_A1[1:])
 
     def parse_func_head(self, line):
+        return_type = line[0][1]
+        func_name = line[1][1]
         params_arr = line[3:]
         params = []
         while params_arr[0][0] != ROUND_BRACE_CLOSE:
@@ -46,7 +88,8 @@ class Layer:
             if params_arr[0][0] == COMMA:
                 params_arr = params_arr[1:]
         for p in params:
-            self.parse_new_var(p)
+            self.parse_new_var(p, add=False)
+        self.add_function(func_name, return_type, params, self)
 
     def get_level(self):
         if self.parent is None:
@@ -61,11 +104,26 @@ class Layer:
             else:
                 self.parent.add_warning(warning)
 
+    def add_err(self, err):
+        if self.parent is not None:
+            self.parent.add_err(err)
+        else:
+            self.err.append(err)
+
     def print(self, show):
         if self.parent is None:
-            for warn in self.warnings:
-                print(warn)
-        if show:
+            if len(self.warnings) > 0:
+                print('========= Warnings =========')
+                for warn in self.warnings:
+                    print(warn)
+            if len(self.err) > 0:
+                print('========== Errors ==========')
+                for err in self.err:
+                    print(err)
+
+        if show and len(self.err) == 0:
+            if self.parent is None:
+                print('=========== Code ===========')
             prefix = '\t' * self.get_level()
             for operator in self.operators:
                 head = ''
@@ -188,7 +246,6 @@ class Layer:
                                         self.parse_new_operator(operator)
                                         lex_arr = new_lex_arr
                                     else:
-                                        print(err_4)
                                         return False, err_4
                                 else:
                                     return False, self.make_err('оператор', lex_arr[0])
@@ -268,6 +325,8 @@ class Layer:
             else:
                 return True, self.make_err(';', lex_arr[1]), lex_arr[1:], lex_arr[:1]
         elif lex_arr[0][0] == CURLY_BRACE_OPEN:
+            if lex_arr[1][0] == CURLY_BRACE_CLOSE:
+                return True, '', lex_arr[:2], lex_arr[2:]
             buf = self.accept_warnings
             self.accept_warnings = False
             is_block, err, block, new_lex_arr = self.check_block(lex_arr[1:])
@@ -286,20 +345,40 @@ class Layer:
             if lex_arr[1][0] == ROUND_BRACE_OPEN:
                 buf = self.accept_warnings
                 self.accept_warnings = False
-                is_var_description, err, var_description, new_lex_arr = self.check_var_descrtiption(lex_arr[2:])
+                if lex_arr[2][0] == SEMICOLON:
+                    is_var_description = True
+                    err = ''
+                    var_description = lex_arr[2:3]
+                    new_lex_arr = lex_arr[3:]
+                else:
+                    is_var_description, err, var_description, new_lex_arr = self.check_var_descrtiption(lex_arr[2:])
                 self.accept_warnings = buf
                 if is_var_description:
                     if err == '':
                         buf = self.accept_warnings
                         self.accept_warnings = False
-                        is_A1, err_A1, A1, new_lex_arr_A1 = self.A1(new_lex_arr)
+                        if new_lex_arr[0][0] == SEMICOLON:
+                            is_A1 = True
+                            err_A1 = ''
+                            A1 = []
+                            new_lex_arr_A1 = new_lex_arr
+                            A1_type = None
+                        else:
+                            is_A1, err_A1, A1, new_lex_arr_A1, A1_type, A1_t = self.A1(new_lex_arr)
                         self.accept_warnings = buf
                         if is_A1:
                             if err_A1 == '':
                                 if new_lex_arr_A1[0][0] == SEMICOLON:
                                     buf = self.accept_warnings
                                     self.accept_warnings = False
-                                    is_A1_1, err_A1_1, A1_1, new_lex_arr_A1_1 = self.A1(new_lex_arr_A1[1:])
+                                    if new_lex_arr_A1[1][0]==ROUND_BRACE_CLOSE:
+                                        is_A1_1 = True
+                                        err_A1_1 = ''
+                                        A1_1 = []
+                                        new_lex_arr_A1_1 = new_lex_arr_A1[1:]
+                                        A1_1_type = None
+                                    else:
+                                        is_A1_1, err_A1_1, A1_1, new_lex_arr_A1_1, A1_1_type, A1_1_t = self.A1(new_lex_arr_A1[1:])
                                     self.accept_warnings = buf
                                     if is_A1_1:
                                         if err_A1_1 == '':
@@ -336,7 +415,7 @@ class Layer:
             else:
                 return True, self.make_err('(', lex_arr[1]), [], lex_arr[1:]
         else:
-            is_A1, err, A1, new_lex_arr = self.A1(lex_arr)
+            is_A1, err, A1, new_lex_arr, A1_type, A1_t= self.A1(lex_arr)
             if is_A1:
                 if err == '':
                     if new_lex_arr[0][0] == SEMICOLON:
@@ -359,91 +438,102 @@ class Layer:
                 if not self.have_function(lex_arr[0][1]):
                     self.add_warning(
                         'Использование необъявленной функции {} [{}:{}]'.format(lex_arr[0][1], lex_arr[0][2] + 1,
-                                                                                   lex_arr[0][3] + 1))
+                                                                                  lex_arr[0][3] + 1))
 
-                if lex_arr[2][0] == ROUND_BRACE_CLOSE:
-                    return True, '', lex_arr[:3], lex_arr[3:]
-                else:
-                    params = []
-                    lex_arr_1 = lex_arr[2:]
-                    while lex_arr_1[0][0] != ROUND_BRACE_CLOSE:
-                        is_A1, err, A1, new_lex_arr = self.A1(lex_arr_1)
-                        if is_A1:
-                            if err == '':
-                                params += A1
-                                lex_arr_1 = new_lex_arr
-                            else:
-                                return True, err, [], lex_arr_1
+                params = []
+                param_types = []
+                lex_arr_1 = lex_arr[2:]
+                while lex_arr_1[0][0] != ROUND_BRACE_CLOSE:
+                    is_A1, err, A1, new_lex_arr, A1_type, A1_t = self.A1(lex_arr_1)
+                    if is_A1:
+                        if err == '':
+                            param_types.append(A1_type)
+                            params += A1
+                            lex_arr_1 = new_lex_arr
                         else:
-                            return True, err, [], lex_arr_1
-                        if lex_arr_1[0][0] == COMMA:
-                            params += lex_arr_1[:1]
-                            lex_arr_1 = lex_arr_1[1:]
-                    if lex_arr_1[0][0] == ROUND_BRACE_CLOSE:
-                        return True, '', lex_arr[:2] + params + lex_arr_1[:1], lex_arr_1[1:]
+                            return True, err, [], lex_arr_1, A1_type, None
                     else:
-                        return True, self.make_err(')', lex_arr[0]), [], lex_arr
+                        return True, err, [], lex_arr_1, A1_type, None
+                    if lex_arr_1[0][0] == COMMA:
+                        params += lex_arr_1[:1]
+                        lex_arr_1 = lex_arr_1[1:]
+                if lex_arr_1[0][0] == ROUND_BRACE_CLOSE:
+                    if self.accept_warnings:
+                        for func in self.get_functions():
+                            if func['name'] == lex_arr[0][1]:
+                                if len(func['parameter_types']) == len(param_types):
+                                    equal = True
+                                    for type_1, type_2 in zip(param_types,func['parameter_types']):
+                                        if type_1 != type_2[0][1]:
+                                            equal = False
+                                    if equal:
+                                        return True, '', lex_arr[:2] + params + lex_arr_1[:1], lex_arr_1[1:], func['return_type'], 'const'
+                        return True, 'Нет функции {} с такими параметрами {} [{}:{}]'.format(lex_arr[0][1], param_types, lex_arr[0][2]+1, lex_arr[0][3]+1), [], lex_arr, None, None
+                    else:
+                        return True, '', lex_arr[:2] + params + lex_arr_1[:1], lex_arr_1[1:], None, 'const'
+                else:
+                    return True, self.make_err(')', lex_arr[0]), [], lex_arr, None, None
             else:
+                var_type = ''
                 if not self.have_variable(lex_arr[0][1]):
                     self.add_warning('Использование необъявленной переменной {} [{}:{}]'.format(lex_arr[0][1], lex_arr[0][2]+1, lex_arr[0][3]+1))
-                if lex_arr[1][0] == SQUARE_BRACE_OPEN:
-                    is_A1, err, A1, new_lex_arr = self.A1(lex_arr[2:])
+                elif self.accept_warnings:
+                        var_type = self.get_var(lex_arr[0][1])['type']
+
+                var_name = lex_arr[:1]
+                lex_arr = lex_arr[1:]
+                while lex_arr[0][0] == SQUARE_BRACE_OPEN:
+                    is_A1, err, A1, new_lex_arr, A1_type, A1_t = self.A1(lex_arr[2:])
                     if is_A1:
                         if err == '':
                             if new_lex_arr[0][0] == SQUARE_BRACE_CLOSE:
-                                if new_lex_arr[1][0] == ASSIGN:
-                                    is_A1_1, err_1, A1_1, new_lex_arr_1 = self.A1(new_lex_arr[2:])
-                                    if is_A1_1:
-                                        if err_1 == '':
-                                            return True, '', lex_arr[:2] + A1 + new_lex_arr[:2] + A1_1, new_lex_arr_1
-                                        else:
-                                            return True, err, [], new_lex_arr[1:]
-                                    else:
-                                        return True, err, [], new_lex_arr[1:]
+                                if self.accept_warnings and A1_type != 'int' and A1_type != '__int64':
+                                    self.add_warning('Ожидалось чилсо или переменная типа int или __int64, встречено {}'
+                                                     ' [{}:{}]'.format(A1_type, A1[0][2]+1, A1[0][3]+1))
+                                var_name += lex_arr[:1]+A1+new_lex_arr[:1]
+                                lex_arr = new_lex_arr[1:]
+                                new_var_type = self.get_type(var_type)['type']
+                                if self.accept_warnings and new_var_type is None:
+                                    return True, 'Тип {} не итерируемый [{}:{}]'.format(var_type, A1[0][2]+1, A1[0][3]+1), [], lex_arr[1:], var_type, 'var'
                                 else:
-                                    if new_lex_arr[2][0] == ASSIGN:
-                                        if new_lex_arr[1][0] == STAR or new_lex_arr[1][0] == SLASH or new_lex_arr[1][0] == PLUS or new_lex_arr[1][0] == MINUS:
-                                            is_A1_1, err_1, A1_1, new_lex_arr_1 = self.A1(new_lex_arr[3:])
-                                            if is_A1_1:
-                                                if err_1 == '':
-                                                    return True, '', lex_arr[:3] + A1 + new_lex_arr[
-                                                                                        :3] + A1_1, new_lex_arr_1
-                                                else:
-                                                    return True, err, [], new_lex_arr[2:]
-                                            else:
-                                                return True, err, [], new_lex_arr[2:]
-                                    else:
-                                        return True, '', lex_arr[:2] + A1 + new_lex_arr[:1], new_lex_arr[1:]
+                                    var_type = new_var_type
                             else:
-                                return True, self.make_err(']', new_lex_arr[0]), lex_arr[:2], new_lex_arr
+                                return True, self.make_err(']', new_lex_arr[0]), lex_arr[:2], new_lex_arr, var_type, None
                         else:
-                            return True, err, [], lex_arr[1:]
+                            return True, err, [], lex_arr[1:], var_type, None
                     else:
-                        return True, err, [], lex_arr[1:]
-                else:
-                    if lex_arr[1][0] == ASSIGN:
-                        is_A1_1, err_1, A1_1, new_lex_arr_1 = self.A1(lex_arr[2:])
-                        if is_A1_1:
-                            if err_1 == '':
-                                return True, '', lex_arr[:2]+A1_1, new_lex_arr_1
-                            else:
-                                return True, err_1, [], lex_arr[2:]
+                        return True, err, [], lex_arr[1:], var_type, None
+
+                if lex_arr[0][0] == ASSIGN:
+                    is_A1_1, err_1, A1_1, new_lex_arr_1, A1_1_type, A1_1_t = self.A1(lex_arr[1:])
+                    if is_A1_1:
                         if err_1 == '':
-                            return True, err_1, [], lex_arr[2:]
+                            if self.accept_warnings and var_type != A1_1_type:
+                                self.add_warning('Присвоение переменной типа {} значения типа {} [{}:{}]'
+                                                 .format(var_type, A1_1_type, A1_1[0][2]+1, A1_1[0][3]+1))
+                            return True, '', var_name+lex_arr[:1]+A1_1, new_lex_arr_1, var_type, 'var'
+                        else:
+                            return True, err_1, [], lex_arr[2:], var_type, None
+                    if err_1 == '':
+                        return True, err_1, [], lex_arr[2:], var_type, None
 
-                    if lex_arr[2][0] == ASSIGN:
-                        if lex_arr[1][0] == STAR or lex_arr[1][0] == SLASH or lex_arr[1][0] == PLUS or lex_arr[1][0] == MINUS:
-                            is_A1_1, err_1, A1_1, new_lex_arr_1 = self.A1(lex_arr[3:])
-                            if is_A1_1:
-                                if err_1:
-                                    return True, '', lex_arr[:3] + A1_1, new_lex_arr_1
-                                else:
-                                    return True, err_1, [], lex_arr[3:]
-                            if err_1 == '':
-                                return True, err_1, [], lex_arr[3:]
+                if lex_arr[1][0] == ASSIGN:
+                    if lex_arr[0][0] == STAR or lex_arr[0][0] == SLASH or lex_arr[0][0] == PLUS or lex_arr[0][0] == MINUS:
+                        is_A1_1, err_1, A1_1, new_lex_arr_1, A1_1_type, A1_1_t= self.A1(lex_arr[2:])
+                        if is_A1_1:
+                            if err_1:
+                                A1_1_type = self.calculate_type(var_type, A1_1_type)
+                                if self.accept_warnings and var_type != A1_1_type:
+                                    self.add_warning('Присвоение переменной типа {} значения типа {} [{}:{}]'
+                                                     .format(var_type, A1_1_type, A1_1[0][2] + 1, A1_1[0][3] + 1))
+                                return True, '', var_name+lex_arr[:2] + A1_1, new_lex_arr_1, var_type, 'const'
+                            else:
+                                return True, err_1, [], lex_arr[3:], var_type, None
+                        if err_1 == '':
+                            return True, err_1, [], lex_arr[3:], var_type, None
 
-                    return True, '', lex_arr[:1], lex_arr[1:]
-        return False, self.make_err('идентификатор', lex_arr[0]), [], lex_arr
+                return True, '', var_name, lex_arr, var_type, 'var'
+        return False, self.make_err('идентификатор', lex_arr[0]), [], lex_arr, None, None
 
     # Список параметров
     def check_param_list(self, lex_arr):
@@ -478,7 +568,8 @@ class Layer:
                 if lex_arr[2][0] == ID:
                     is_t, err_t = self.is_type(lex_arr[2])
                     if is_t:
-                        return True, 'Такой тип уже был объявлен', [], lex_arr
+                        return True, 'Тип {} уже был объявлен [{}:{}]'\
+                            .format(lex_arr[2][1], lex_arr[2][2]+1, lex_arr[2][3]+1), [], lex_arr
                     if lex_arr[3][0] == SQUARE_BRACE_OPEN:
                         if lex_arr[4][0] == TYPE_INT or lex_arr[4][0] == TYPE_SINT:
                             if lex_arr[5][0] == SQUARE_BRACE_CLOSE:
@@ -504,7 +595,7 @@ class Layer:
     def check_var_descrtiption(self, lex_arr):
         is_t, err_t = self.is_type(lex_arr[0])
         if is_t:
-            is_var_list, err, vars, new_lex_arr = self.check_var_list(lex_arr[1:])
+            is_var_list, err, vars, new_lex_arr = self.check_var_list(lex_arr[1:], lex_arr[0][1])
             if is_var_list:
                 if err == '':
                     if new_lex_arr[0][0] == SEMICOLON:
@@ -519,7 +610,7 @@ class Layer:
             return False, err_t, [], lex_arr
 
     # Список переменных
-    def check_var_list(self, lex_arr):
+    def check_var_list(self, lex_arr, var_type):
         vars = []
         while lex_arr[0][0] == ID:
             if lex_arr[1][0] == ROUND_BRACE_OPEN:
@@ -540,9 +631,12 @@ class Layer:
                     return True, self.make_err('константа', lex_arr[2]), vars, lex_arr
 
             elif lex_arr[1][0] == ASSIGN:
-                is_A1, err, A1, new_lex_arr = self.A1(lex_arr[2:])
+                is_A1, err, A1, new_lex_arr, A1_type, A1_t = self.A1(lex_arr[2:])
                 if is_A1:
                     if err == '':
+                        if self.accept_warnings and A1_type != var_type:
+                            self.add_warning('Присвоение переменной типа {} значения типа {} [{}:{}]'
+                                             .format(var_type, A1_type, A1[0][2]+1, A1[0][3]+1))
                         if new_lex_arr[0][0] == COMMA:
                             vars += lex_arr[:2] + A1 + new_lex_arr[:1]
                             lex_arr = new_lex_arr[1:]
@@ -566,135 +660,157 @@ class Layer:
         return False, self.make_err('идентификатор', lex_arr[0]), [], lex_arr
 
     def A1(self, lex_arr):
-        is_A2, err, A2, new_lex_arr = self.A2(lex_arr)
+        is_A2, err, A2, new_lex_arr, A2_type, A2_t = self.A2(lex_arr)
         if is_A2:
             if err == '':
                 if new_lex_arr[0][0] == EQUAL or new_lex_arr[0][0] == MORE_EQUAL or new_lex_arr[0][0] == LESS_EQUAL or \
                         new_lex_arr[0][0] == MORE or new_lex_arr[0][0] == LESS:
-                    is_A2_1, err_1, A2_1, new_lex_arr_1 = self.A2(new_lex_arr[1:])
+                    is_A2_1, err_1, A2_1, new_lex_arr_1, A2_1_type, A2_1_t = self.A2(new_lex_arr[1:])
                     if is_A2_1:
                         if err_1 == '':
-                            return True, '', A2 + new_lex_arr[:1] + A2_1, new_lex_arr_1
+                            if self.accept_warnings and A2_type != A2_1_type:
+                                return True, 'Недопустимая операция {} для типов {} и {} [{}:{}]'\
+                                    .format(new_lex_arr[0][1], A2_type, A2_1_type, new_lex_arr[0][2]+1, new_lex_arr[0][3]+1), [], new_lex_arr, None, None
+                            return True, '', A2 + new_lex_arr[:1] + A2_1, new_lex_arr_1, None, 'const'
                         else:
-                            return True, err_1, [], new_lex_arr_1
+                            return True, err_1, [], new_lex_arr_1, A2_1_type, None
                     else:
-                        return True, err_1, [], new_lex_arr_1
+                        return True, err_1, [], new_lex_arr_1, A2_1_type, None
                 else:
-                    return True, '', A2, new_lex_arr
+                    return True, '', A2, new_lex_arr, A2_type, A2_t
             else:
-                return True, err, [], new_lex_arr
+                return True, err, [], new_lex_arr, A2_type, None
         else:
-            return False, err, [], new_lex_arr
+            return False, err, [], new_lex_arr, A2_type, None
 
     def A2(self, lex_arr):
-        is_A3, err, A3, new_lex_arr = self.A3(lex_arr)
+        is_A3, err, A3, new_lex_arr, A3_type, A3_t = self.A3(lex_arr)
         if is_A3:
             if err == '':
                 if new_lex_arr[0][0] == PLUS or new_lex_arr[0][0] == MINUS:
-                    is_A3_1, err_1, A3_1, new_lex_arr_1 = self.A3(new_lex_arr[1:])
+                    is_A3_1, err_1, A3_1, new_lex_arr_1, A3_1_type, A3_1_t = self.A3(new_lex_arr[1:])
                     if is_A3_1:
                         if err_1 == '':
-                            return True, '', A3 + new_lex_arr[:1] + A3_1, new_lex_arr_1
+                            if self.accept_warnings and A3_type != A3_1_type:
+                                return True, 'Недопустимая операция {} для типов {} и {} [{}:{}]'\
+                                    .format(new_lex_arr[0][1], A3_type, A3_1_type, new_lex_arr[0][2]+1, new_lex_arr[0][3]+1), \
+                                       [], new_lex_arr, None, None
+                            return True, '', A3 + new_lex_arr[:1] + A3_1, new_lex_arr_1, A3_type, 'const'
                         else:
-                            return True, err_1, [], new_lex_arr_1
+                            return True, err_1, [], new_lex_arr_1, A3_1_type, None
                     else:
-                        return True, err_1, [], new_lex_arr_1
+                        return True, err_1, [], new_lex_arr_1, A3_1_type, None
                 else:
-                    return True, '', A3, new_lex_arr
+                    return True, '', A3, new_lex_arr, A3_type, A3_t
             else:
-                return True, err, [], new_lex_arr
+                return True, err, [], new_lex_arr, A3_type, None
         else:
-            return False, err, [], new_lex_arr
+            return False, err, [], new_lex_arr, A3_type, None
 
     def A3(self, lex_arr):
-        is_A4, err, A4, new_lex_arr = self.A4(lex_arr)
+        is_A4, err, A4, new_lex_arr, A4_type, A4_t = self.A4(lex_arr)
         if is_A4:
             if err == '':
                 if new_lex_arr[0][0] == STAR or new_lex_arr[0][0] == SLASH or new_lex_arr[0][0] == PERCENT:
-                    is_A4_1, err_1, A4_1, new_lex_arr_1 = self.A4(new_lex_arr[1:])
+                    is_A4_1, err_1, A4_1, new_lex_arr_1, A4_1_type, A4_1_t = self.A4(new_lex_arr[1:])
                     if is_A4_1:
                         if err_1 == '':
-                            return True, '', A4 + new_lex_arr[:1] + A4_1, new_lex_arr_1
+                            if self.accept_warnings and A4_type != A4_1_type:
+                                return True, 'Недопустимая операция {} для типов {} и {} [{}:{}]'\
+                                    .format(new_lex_arr[0][1], A4_type, A4_1_type, new_lex_arr[0][2]+1, new_lex_arr[0][3]+1), \
+                                       [], new_lex_arr, None, None
+
+                            return True, '', A4 + new_lex_arr[:1] + A4_1, new_lex_arr_1, None, 'const'
                         else:
-                            return True, err_1, [], new_lex_arr_1
+                            return True, err_1, [], new_lex_arr_1, A4_1_type, None
                     else:
-                        return True, err_1, [], new_lex_arr_1
+                        return True, err_1, [], new_lex_arr_1, A4_1_type, None
                 else:
-                    return True, '', A4, new_lex_arr
+                    return True, '', A4, new_lex_arr, A4_type, A4_t
             else:
-                return True, err, [], new_lex_arr
+                return True, err, [], new_lex_arr, A4_type, None
         else:
-            return False, err, [], new_lex_arr
+            return False, err, [], new_lex_arr, A4_type, None
 
     def A4(self, lex_arr):
-        is_A5, err, A5, new_lex_arr = self.A5(lex_arr)
+        is_A5, err, A5, new_lex_arr, A5_type, A5_t = self.A5(lex_arr)
         if is_A5:
             if err == '':
                 if new_lex_arr[0][0] == PLUS and new_lex_arr[1][0] == PLUS or \
                         new_lex_arr[0][0] == MINUS and new_lex_arr[1][0] == MINUS:
-                    return True, '', A5 + new_lex_arr[:2], new_lex_arr[2:]
+                    if self.accept_warnings and A5 != 'var':
+                        return True, 'Недопустимый параметр {} для операции [{}:{}]'.format(self.get_str_from_lex_arr(A5), A5[0][2]+1, A5[0][3]+1),\
+                               A5, new_lex_arr, None, None
+                    else:
+                        return True, '', A5 + new_lex_arr[:2], new_lex_arr[2:], None, 'const'
                 else:
-                    return True, '', A5, new_lex_arr
+                    return True, '', A5, new_lex_arr, A5_type, A5_t
             else:
-                return True, err, [], new_lex_arr
+                return True, err, [], new_lex_arr, A5_type, None
         else:
-            return False, err, [], new_lex_arr
+            return False, err, [], new_lex_arr, A5_type, None
 
     def A5(self, lex_arr):
         if lex_arr[0][0] == PLUS and lex_arr[1][0] == PLUS or \
                 lex_arr[0][0] == MINUS and lex_arr[1][0] == MINUS:
-            is_A6, err, A6, new_lex_arr = self.A6(lex_arr[2:])
+            is_A6, err, A6, new_lex_arr, A6_type, A6_t = self.A6(lex_arr[2:])
             if is_A6:
                 if err == '':
-                    return True, '', lex_arr[:2] + A6, new_lex_arr
+                    if self.accept_warnings and A6_t != 'var':
+                        return True, 'Недопустимый параметр {} для операции [{}:{}]'.format(self.get_str_from_lex_arr(A6), A6[0][2] + 1, A6[0][3] + 1), \
+                               [], new_lex_arr, None, None
+                    else:
+                        return True, '', lex_arr[:2] + A6, new_lex_arr, A6_type, A6_t
                 else:
-                    return True, err, [], new_lex_arr
+                    return True, err, [], new_lex_arr, A6_type, None
             else:
-                return False, err, [], new_lex_arr
+                return False, err, [], new_lex_arr, A6_type, None
         elif lex_arr[0][0] == PLUS or lex_arr[0][0] == MINUS:
-            is_A6, err, A6, new_lex_arr = self.A6(lex_arr[1:])
+            is_A6, err, A6, new_lex_arr, A6_type, A6_t = self.A6(lex_arr[1:])
             if is_A6:
                 if err == '':
-                    return True, '', new_lex_arr[:1] + A6, new_lex_arr
+                    return True, '', lex_arr[:1] + A6, new_lex_arr, None, 'const'
                 else:
-                    return True, err, [], new_lex_arr
+                    return True, err, [], new_lex_arr, A6_type, None
             else:
-                return False, err, [], new_lex_arr
+                return False, err, [], new_lex_arr, A6_type, None
         else:
-            is_A6, err, A6, new_lex_arr = self.A6(lex_arr)
+            is_A6, err, A6, new_lex_arr, A6_type, A6_t = self.A6(lex_arr)
             if is_A6:
                 if err == '':
-                    return True, '', A6, new_lex_arr
+                    return True, '', A6, new_lex_arr, A6_type, A6_t
                 else:
-                    return True, err, [], new_lex_arr
+                    return True, err, [], new_lex_arr, A6_type, None
             else:
-                return False, err, [], new_lex_arr
+                return False, err, [], new_lex_arr, A6_type, None
 
     def A6(self, lex_arr):
         if lex_arr[0][0] == TYPE_INT or lex_arr[0][0] == TYPE_SINT:
-            return True, '', lex_arr[:1], lex_arr[1:]
+            if lex_arr[0][0] == TYPE_INT:
+                return True, '', lex_arr[:1], lex_arr[1:], 'int', 'const'
+            else:
+                return True, '', lex_arr[:1], lex_arr[1:], '__int64', 'const'
         elif lex_arr[0][0] == ROUND_BRACE_OPEN:
-            is_A1, err, A1, new_lex_arr = self.A1(lex_arr[1:])
+            is_A1, err, A1, new_lex_arr, A1_type, A1_t = self.A1(lex_arr[1:])
             if is_A1:
                 if err == '':
                     if new_lex_arr[0][0] == ROUND_BRACE_CLOSE:
-                        return True, '', lex_arr[:1] + A1 + new_lex_arr[:1], new_lex_arr[1:]
+                        return True, '', lex_arr[:1] + A1 + new_lex_arr[:1], new_lex_arr[1:], A1_type, A1_t
                     else:
-                        return True, self.make_err(')', new_lex_arr[0]), lex_arr[:1] + A1, new_lex_arr
+                        return True, self.make_err(')', new_lex_arr[0]), lex_arr[:1] + A1, new_lex_arr, A1_type, None
                 else:
-                    return True, err, [], new_lex_arr
+                    return True, err, [], new_lex_arr, A1_type, None
             else:
-                return False, err, [], new_lex_arr
+                return False, err, [], new_lex_arr, A1_type, None
         else:
-
-            is_single_oper, err, single_oper, new_lex_arr = self.check_single_operator(lex_arr)
+            is_single_oper, err, single_oper, new_lex_arr, oper_type, oper_t = self.check_single_operator(lex_arr)
             if is_single_oper:
                 if err == '':
-                    return True, '', single_oper, new_lex_arr
+                    return True, '', single_oper, new_lex_arr, oper_type, oper_t
                 else:
-                    return True, err, [], new_lex_arr
+                    return True, err, [], new_lex_arr, oper_type, None
             else:
-                return False, err, [], new_lex_arr
+                return False, err, [], new_lex_arr, oper_type, None
 
     # Проверка типа
     def is_type(self, one_lex):
@@ -723,26 +839,32 @@ class Layer:
     def parse_new_var(self, oper, add=True):
         if add:
             self.operators.append({'type': 'DEFAULT', 'head': oper})
+        if len(oper) == 0:
+            return
         var_type = oper[0][1]
         oper = oper[1:]
         while len(oper) > 0 and oper[0][0] != SEMICOLON:
             name = oper[0][1]
             oper = oper[1:]
 
-            if len(oper) > 0 and oper[0][0] == ASSIGN:
-                assign_oper = []
-                oper = oper[1:]
-                while oper[0][0] != COMMA and oper[0][0] != SEMICOLON:
-                    assign_oper += oper[:1]
+            while len(oper) > 0 and oper[0][0] == SQUARE_BRACE_OPEN:
+                var_type = [var_type for i in range(int(oper[1][1]))]
+                oper = oper[3:]
+            if len(oper) > 0:
+                if oper[0][0] == ASSIGN:
+                    assign_oper = []
                     oper = oper[1:]
-                if self.have_variable(name):
-                    self.add_warning('Повторное объявление переменной {} [{}:{}]'.format(name, oper[0][2] + 1, oper[0][3]))
-                self.add_variable(name, var_type, self.calculate(assign_oper))
-                oper = oper[1:]
-            else:
-                if self.have_variable(name):
-                    self.add_warning('Повторное объявление переменной {} [{}:{}]'.format(name, oper[0][2] + 1, oper[0][3]))
-                self.add_variable(name, var_type)
+                    while oper[0][0] != COMMA and oper[0][0] != SEMICOLON:
+                        assign_oper += oper[:1]
+                        oper = oper[1:]
+                    if self.have_variable(name):
+                        self.add_warning('Повторное объявление переменной {} [{}:{}]'.format(name, oper[0][2] + 1, oper[0][3]))
+                    self.add_variable(name, var_type, self.calculate(assign_oper))
+                    oper = oper[1:]
+                else:
+                    if self.have_variable(name):
+                        self.add_warning('Повторное объявление переменной {} [{}:{}]'.format(name, oper[0][2] + 1, oper[0][3]))
+                    self.add_variable(name, var_type)
             if len(oper) > 0:
                 if oper[0][0] == COMMA:
                     oper = oper[1:]
@@ -759,14 +881,11 @@ class Layer:
             head.append(oper[0])
             oper = oper[1:]
 
-            body = []
             if oper[0][0] == CURLY_BRACE_OPEN:
-                oper = oper[1:]
-                while oper[0][0] != CURLY_BRACE_CLOSE:
-                    body.append(oper[0])
-                    oper = oper[1:]
+                body = oper[1:-1]
             else:
                 body = oper
+
 
             new_param = []
             for i in head[2:]:
