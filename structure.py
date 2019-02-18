@@ -79,8 +79,9 @@ class Layer:
             is_A1, err_A1, A1, new_lex_arr_A1, A1_type, A1_t = self.A1(new_lex_arr)
             if err_A1 != '':
                 self.add_err(err_A1)
+            new_lex_arr_A1 = new_lex_arr_A1[1:]
         if new_lex_arr_A1[0][0]!=ROUND_BRACE_CLOSE:
-            is_A1_1, err_A1_1, A1_1, new_lex_arr_A1_1, A1_1_type, A1_1_t = self.A1(new_lex_arr_A1[1:])
+            is_A1_1, err_A1_1, A1_1, new_lex_arr_A1_1, A1_1_type, A1_1_t = self.A1(new_lex_arr_A1)
             if err_A1_1 != '':
                 self.add_err(err_A1_1)
 
@@ -507,10 +508,14 @@ class Layer:
                                                      ' [{}:{}]'.format(A1_type, A1[0][2]+1, A1[0][3]+1))
                                 var_name += lex_arr[:1]+A1+new_lex_arr[:1]
                                 lex_arr = new_lex_arr[1:]
-                                if type(var_type) is list:
-                                    var_type = var_type[0]
-                                elif self.accept_warnings:
-                                    return True, 'Тип {} не итерируемый [{}:{}]'.format(var_type, A1[0][2]+1, A1[0][3]+1), [], lex_arr[1:], var_type, 'var'
+                                if self.accept_warnings:
+                                    if type(var_type) is list:
+                                        var_type = var_type[0]
+                                    else:
+                                        if self.get_type(var_type)['type'] is not None:
+                                            var_type = self.get_type(var_type)['type']
+                                        else:
+                                            return True, 'Тип {} не итерируемый [{}:{}]'.format(var_type, A1[0][2]+1, A1[0][3]+1), [], lex_arr[1:], var_type, 'var'
 
                             else:
                                 return True, self.make_err(']', new_lex_arr[0]), lex_arr[:2], new_lex_arr, var_type, None
@@ -536,7 +541,7 @@ class Layer:
                     if lex_arr[0][0] == STAR or lex_arr[0][0] == SLASH or lex_arr[0][0] == PLUS or lex_arr[0][0] == MINUS:
                         is_A1_1, err_1, A1_1, new_lex_arr_1, A1_1_type, A1_1_t= self.A1(lex_arr[2:])
                         if is_A1_1:
-                            if err_1:
+                            if err_1=='':
                                 A1_1_type = self.calculate_type(var_type, A1_1_type)
                                 if self.accept_warnings and var_type != A1_1_type:
                                     self.add_warning('Присвоение переменной типа {} значения типа {} [{}:{}]'
@@ -687,7 +692,7 @@ class Layer:
                                     ((A2_type != 'int' and A2_type != '__int64') or (A2_1_type != 'int' and A2_1_type != '__int64')):
                                 return True, 'Недопустимая операция {} для типов {} и {} [{}:{}]'\
                                     .format(new_lex_arr[0][1], A2_type, A2_1_type, new_lex_arr[0][2]+1, new_lex_arr[0][3]+1), [], new_lex_arr, None, None
-                            return True, '', A2 + new_lex_arr[:1] + A2_1, new_lex_arr_1, A2_type, 'const'
+                            return True, '', A2 + new_lex_arr[:1] + A2_1, new_lex_arr_1, 'int', 'const'
                         else:
                             return True, err_1, [], new_lex_arr_1, A2_1_type, None
                     else:
@@ -737,7 +742,7 @@ class Layer:
                                     .format(new_lex_arr[0][1], A4_type, A4_1_type, new_lex_arr[0][2]+1, new_lex_arr[0][3]+1), \
                                        [], new_lex_arr, None, None
 
-                            return True, '', A4 + new_lex_arr[:1] + A4_1, new_lex_arr_1, None, 'const'
+                            return True, '', A4 + new_lex_arr[:1] + A4_1, new_lex_arr_1, A4_type, 'const'
                         else:
                             return True, err_1, [], new_lex_arr_1, A4_1_type, None
                     else:
@@ -756,10 +761,12 @@ class Layer:
                 if new_lex_arr[0][0] == PLUS and new_lex_arr[1][0] == PLUS or \
                         new_lex_arr[0][0] == MINUS and new_lex_arr[1][0] == MINUS:
                     if self.accept_warnings and A5_t != 'var':
-                        return True, 'Недопустимый параметр {} для операции [{}:{}]'.format(self.get_str_from_lex_arr(A5), A5[0][2]+1, A5[0][3]+1),\
+                        return True, 'Недопустимый параметр {} для операции {} [{}:{}]'.format(self.get_str_from_lex_arr(A5),
+                                                                                               self.get_str_from_lex_arr(new_lex_arr[:2]),
+                                                                                               A5[0][2]+1, A5[0][3]+1),\
                                A5, new_lex_arr, None, None
                     else:
-                        return True, '', A5 + new_lex_arr[:2], new_lex_arr[2:], None, 'const'
+                        return True, '', A5 + new_lex_arr[:2], new_lex_arr[2:], A5_type, A5_t
                 else:
                     return True, '', A5, new_lex_arr, A5_type, A5_t
             else:
@@ -786,7 +793,7 @@ class Layer:
             is_A6, err, A6, new_lex_arr, A6_type, A6_t = self.A6(lex_arr[1:])
             if is_A6:
                 if err == '':
-                    return True, '', lex_arr[:1] + A6, new_lex_arr, None, 'const'
+                    return True, '', lex_arr[:1] + A6, new_lex_arr, A6_type, 'const'
                 else:
                     return True, err, [], new_lex_arr, A6_type, None
             else:
