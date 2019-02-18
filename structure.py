@@ -1,5 +1,5 @@
 from scaner import *
-import numpy as np
+
 class Layer:
     def __init__(self, lex_arr, type=None, head=None, parent=None, show=False):
         self.lex_arr = lex_arr
@@ -17,6 +17,7 @@ class Layer:
             self.add_type('int', None)
             self.add_type('__int64', None)
         if type is not None:
+            self.type = type
             if type == 'FOR':
                 self.parse_for_head(head)
             if type == 'FUNCTION':
@@ -333,6 +334,9 @@ class Layer:
     def check_operator(self, lex_arr):
         if lex_arr[0][0] == BREAK:
             if lex_arr[1][0] == SEMICOLON:
+                if self.accept_warnings:
+                    if self.type != 'FOR':
+                        return True, 'Использование break вне модуля FOR [{}:{}]'.format(lex_arr[0][2]+1, lex_arr[0][3]+1), [], lex_arr
                 return True, '', lex_arr[:2], lex_arr[2:]
             else:
                 return True, self.make_err(';', lex_arr[1]), lex_arr[1:], lex_arr[:1]
