@@ -1,4 +1,6 @@
-from syntaxAnalizer import *
+from interpreter import *
 
-layers = SyntaxAnalizerV2().get_layers('code.txt', show=True)
+Interpreter('code.txt')
+
 pass
+

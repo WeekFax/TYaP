@@ -1,28 +1,5 @@
-//asd fkkk
-
-typedef int dds[10];
-typedef dds long;
-int a, b[1];
-
-int main(int y, int x){
-
-
-   dds v1[10];
-   long v2;
-   for (;x>3;);
-
-    int xx;
-
-    x+=-1*(a+3);
-
-    for (int i=1000;i<x;x=y+0x43){
-        for (int j=0;j<i; j++)
-            for (int jj=0;j<i; j++) {int aaa =0;}
-            break;
-    }
-
-  //  srand(time(NULL[0]));
-  main(v1[0][0], 2);
-    int n=v1[0][v1[0][0]],m=4;
+int main(){
+   int a = 2*3-7*2;
+   print(2);
 }
 

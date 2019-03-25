@@ -171,6 +171,8 @@ class Layer:
         return False
 
     def have_function(self, name):
+        if name == 'print':
+            return True
         for f in self.get_functions():
             if f['name'] == name:
                 return True
@@ -192,10 +194,10 @@ class Layer:
 
         return False
 
-    def add_variable(self, name, type, value = 0):
-        self.variables.append({'name':name,
-                               'type':type,
-                               'value':value})
+    def add_variable(self, name, type, value=None):
+        self.variables.append({'name': name,
+                               'type': type,
+                               'value': value})
 
     def add_type(self, name, type, count=1):
         self.types.append({'name': name,
@@ -203,10 +205,10 @@ class Layer:
                            'count': count})
 
     def add_function(self, name, return_type, parameter_types, layer):
-        self.functions.append({'name':name,
-                               'return_type':return_type,
-                               'parameter_types':parameter_types,
-                               'layer':layer})
+        self.functions.append({'name': name,
+                               'return_type': return_type,
+                               'parameter_types': parameter_types,
+                               'layer': layer})
 
     def merge(self, lex_arr):
         s = ''
@@ -475,13 +477,16 @@ class Layer:
                         lex_arr_1 = lex_arr_1[1:]
                 if lex_arr_1[0][0] == ROUND_BRACE_CLOSE:
                     if self.accept_warnings:
+
                         for func in self.get_functions():
-                            if func['name'] == lex_arr[0][1]:
-                                if len(func['parameter_types']) == len(param_types):
+                            if func['name'] == lex_arr[0][1] or lex_arr[0][1] == 'print':
+                                if len(func['parameter_types']) == len(param_types) or lex_arr[0][1] == 'print':
                                     equal = True
                                     for type_1, type_2 in zip(param_types,func['parameter_types']):
                                         if type_1 != type_2[0][1]:
                                             equal = False
+                                    if lex_arr[0][1] == 'print':
+                                        equal = True
                                     if equal:
                                         return True, '', lex_arr[:2] + params + lex_arr_1[:1], lex_arr_1[1:], func['return_type'], 'const'
                         return True, 'Нет функции {} с такими параметрами {} [{}:{}]'.format(lex_arr[0][1], param_types, lex_arr[0][2]+1, lex_arr[0][3]+1), [], lex_arr, None, None
@@ -687,7 +692,8 @@ class Layer:
         is_A2, err, A2, new_lex_arr, A2_type, A2_t = self.A2(lex_arr)
         if is_A2:
             if err == '':
-                if new_lex_arr[0][0] == EQUAL or new_lex_arr[0][0] == MORE_EQUAL or new_lex_arr[0][0] == LESS_EQUAL or \
+                lexs = []
+                while new_lex_arr[0][0] == EQUAL or new_lex_arr[0][0] == MORE_EQUAL or new_lex_arr[0][0] == LESS_EQUAL or \
                         new_lex_arr[0][0] == MORE or new_lex_arr[0][0] == LESS:
                     is_A2_1, err_1, A2_1, new_lex_arr_1, A2_1_type, A2_1_t = self.A2(new_lex_arr[1:])
                     if is_A2_1:
@@ -696,11 +702,15 @@ class Layer:
                                     ((A2_type != 'int' and A2_type != '__int64') or (A2_1_type != 'int' and A2_1_type != '__int64')):
                                 return True, 'Недопустимая операция {} для типов {} и {} [{}:{}]'\
                                     .format(new_lex_arr[0][1], A2_type, A2_1_type, new_lex_arr[0][2]+1, new_lex_arr[0][3]+1), [], new_lex_arr, None, None
-                            return True, '', A2 + new_lex_arr[:1] + A2_1, new_lex_arr_1, 'int', 'const'
+
                         else:
                             return True, err_1, [], new_lex_arr_1, A2_1_type, None
                     else:
                         return True, err_1, [], new_lex_arr_1, A2_1_type, None
+                    lexs += new_lex_arr[:1]+A2_1
+                    new_lex_arr = new_lex_arr_1
+                if len(lexs) > 0:
+                    return True, '', A2 + lexs, new_lex_arr, 'int', 'const'
                 else:
                     return True, '', A2, new_lex_arr, A2_type, A2_t
             else:
@@ -712,7 +722,8 @@ class Layer:
         is_A3, err, A3, new_lex_arr, A3_type, A3_t = self.A3(lex_arr)
         if is_A3:
             if err == '':
-                if new_lex_arr[0][0] == PLUS or new_lex_arr[0][0] == MINUS:
+                lexs = []
+                while new_lex_arr[0][0] == PLUS or new_lex_arr[0][0] == MINUS:
                     is_A3_1, err_1, A3_1, new_lex_arr_1, A3_1_type, A3_1_t = self.A3(new_lex_arr[1:])
                     if is_A3_1:
                         if err_1 == '':
@@ -721,11 +732,14 @@ class Layer:
                                 return True, 'Недопустимая операция {} для типов {} и {} [{}:{}]'\
                                     .format(new_lex_arr[0][1], A3_type, A3_1_type, new_lex_arr[0][2]+1, new_lex_arr[0][3]+1), \
                                        [], new_lex_arr, None, None
-                            return True, '', A3 + new_lex_arr[:1] + A3_1, new_lex_arr_1, A3_type, 'const'
                         else:
                             return True, err_1, [], new_lex_arr_1, A3_1_type, None
                     else:
                         return True, err_1, [], new_lex_arr_1, A3_1_type, None
+                    lexs += new_lex_arr[:1]+A3_1
+                    new_lex_arr = new_lex_arr_1
+                if len(lexs) > 0:
+                    return True, '', A3 + lexs, new_lex_arr, A3_type, 'const'
                 else:
                     return True, '', A3, new_lex_arr, A3_type, A3_t
             else:
@@ -737,7 +751,8 @@ class Layer:
         is_A4, err, A4, new_lex_arr, A4_type, A4_t = self.A4(lex_arr)
         if is_A4:
             if err == '':
-                if new_lex_arr[0][0] == STAR or new_lex_arr[0][0] == SLASH or new_lex_arr[0][0] == PERCENT:
+                lexs = []
+                while new_lex_arr[0][0] == STAR or new_lex_arr[0][0] == SLASH or new_lex_arr[0][0] == PERCENT:
                     is_A4_1, err_1, A4_1, new_lex_arr_1, A4_1_type, A4_1_t = self.A4(new_lex_arr[1:])
                     if is_A4_1:
                         if err_1 == '':
@@ -745,12 +760,14 @@ class Layer:
                                 return True, 'Недопустимая операция {} для типов {} и {} [{}:{}]'\
                                     .format(new_lex_arr[0][1], A4_type, A4_1_type, new_lex_arr[0][2]+1, new_lex_arr[0][3]+1), \
                                        [], new_lex_arr, None, None
-
-                            return True, '', A4 + new_lex_arr[:1] + A4_1, new_lex_arr_1, A4_type, 'const'
                         else:
                             return True, err_1, [], new_lex_arr_1, A4_1_type, None
                     else:
                         return True, err_1, [], new_lex_arr_1, A4_1_type, None
+                    lexs += new_lex_arr[:1] + A4_1
+                    new_lex_arr = new_lex_arr_1
+                if len(lexs) > 0:
+                    return True, '', A4 + lexs, new_lex_arr, A4_type, 'const'
                 else:
                     return True, '', A4, new_lex_arr, A4_type, A4_t
             else:
@@ -849,7 +866,7 @@ class Layer:
 
     # Вычисление оператора
     def calculate(self, oper):
-        return 0
+        return None
 
     # Добавление нового типа
     def parse_new_type(self, oper):
@@ -943,6 +960,7 @@ class Layer:
 
             params += [param]
             if params_arr[0][0] == COMMA:
+                head.append(params_arr[0])
                 params_arr = params_arr[1:]
         head.append(params_arr[0])
         block_arr = params_arr[2:-1]
