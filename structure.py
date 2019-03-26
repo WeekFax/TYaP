@@ -184,20 +184,36 @@ class Layer:
                 return True
         return False
 
-    def set_variable(self, name, value):
+    def change_value(self, old_value, iter, new_value):
+        if len(iter) > 0:
+            old_value[iter[0]] = self.change_value(old_value[iter[0]], iter[1:], new_value)
+            return old_value
+        else:
+            return new_value
+
+    def set_variable(self, name, value, iter=None):
         for i in range(len(self.variables)):
-            if self.variables[i][0] == name:
-                self.variables[i][2] = value
+            if self.variables[i]['name'] == name:
+                if iter is None:
+                    self.variables[i]['value'] = value
+                else:
+                    self.variables[i]['value'] = self.change_value(self.variables[i]['value'], iter, value)
                 return True
         if self.parent is not None:
-            return self.parent.set_variable(name, value)
+            return self.parent.set_variable(name, value, iter)
 
         return False
+
+    def init_value(self, type):
+        if type == 'int' or type == 'int64':
+            return None
+        t = self.get_type(type)
+        return [self.init_value(t['type']) for i in range(t['count'])]
 
     def add_variable(self, name, type, value=None):
         self.variables.append({'name': name,
                                'type': type,
-                               'value': value})
+                               'value': self.init_value(type)})
 
     def add_type(self, name, type, count=1):
         self.types.append({'name': name,
@@ -546,7 +562,7 @@ class Layer:
                     if err_1 == '':
                         return True, err_1, [], lex_arr[2:], var_type, None
 
-                if lex_arr[1][0] == ASSIGN:
+                if len(lex_arr)>1 and lex_arr[1][0] == ASSIGN:
                     if lex_arr[0][0] == STAR or lex_arr[0][0] == SLASH or lex_arr[0][0] == PLUS or lex_arr[0][0] == MINUS:
                         is_A1_1, err_1, A1_1, new_lex_arr_1, A1_1_type, A1_1_t= self.A1(lex_arr[2:])
                         if is_A1_1:

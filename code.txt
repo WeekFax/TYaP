@@ -1,5 +1,11 @@
+typedef int bbb[10];
+typedef bbb ccc[2];
+
 int main(){
-   int a = 2*3-7*2;
-   print(2);
+   bbb a;
+   for(int i=1; i<10; i+=1){
+        a[i]=i;
+   }
+   print(a);
 }
 
